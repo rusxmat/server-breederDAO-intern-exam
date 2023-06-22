@@ -1,15 +1,21 @@
 const express = require('express');
+const { Web3 } = require('web3')
 const axios = require('axios');
-const expressGraphQL = require('express-graphql').graphqlHTTP;
-const { AxieClass } = require('./model');
-require('./config')
 const { ApolloServer, gql } = require('apollo-server-express');
-const { buildSchema } = require('graphql')
-const {AXIE_CLASS} = require('./utilities')
 
+const {axieInfinityABI} = require('./axie-abi')
+const { AxieClass } = require('./model');
+const {AXIE_CLASS} = require('./utilities')
+require('./config')
+
+const web3 = new Web3('https://mainnet.infura.io/v3/28ac3a4115184fa4a1204f5ee9bc9bb6');
 const app = express();
 
 const typeDefs = gql`
+    type Query {
+        callContractMethod(methodName: String!, args: [String]): String
+    }
+
     type Query {
         getAllAxies: [Axie!]!
     }
@@ -40,6 +46,7 @@ const typeDefs = gql`
 
 
 `;
+
 
 const resolvers = {
     Query: {
@@ -83,6 +90,18 @@ const resolvers = {
           }
         },
       },
+    Query: {
+        callContractMethod: async (_, { methodName, args }) => {
+        const contractAddress = '0xF5b0A3eFB8e8E4c201e2A935F110eAaF3FFEcb8d';
+        const contractABI = axieInfinityABI;
+        const contractInstance = new web3.eth.Contract(contractABI, contractAddress)
+
+        const method = contractInstance.methods[methodName](args);
+        const result = await method.call();
+
+        return String(result)
+    },
+    },
 };
 
 const getAxieLatest = async (req, res) => {

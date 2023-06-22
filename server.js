@@ -11,7 +11,11 @@ const app = express();
 
 const typeDefs = gql`
     type Query {
-        getAxies: [Axie]
+        getAllAxies: [Axie!]!
+    }
+
+    type Query{
+        getAxiesFromClass(classAxie: [String!]!): [Axie!]!
     }
 
     type Axie {
@@ -33,33 +37,43 @@ const typeDefs = gql`
     type Mutation {
         addMultipleAxiesToClass(axies: [AxieInput!]!, classAxie: String!): [Axie!]!
     }
+
+
 `;
 
 const resolvers = {
     Query: {
-        getAxies: async () => await Axie.find({}).exec()
-    },
-    Mutation: {
-        addAxie: async (_, args) => {
-            try{
-                let response = await Axie.create(args)
+        getAllAxies: async () => { 
+
+            const promises = AXIE_CLASS.map(async (classAxie) => {
+                const response = await AxieClass.get(classAxie).find()
                 return response
-            } catch(e) {
-                return e.message
-            }
+            })
+
+            const results = await Promise.all(promises)
+            const allAxies = results.flat()
+
+            return allAxies
+        }
+    },   
+    Query: {
+        getAxiesFromClass: async (_, {classAxie}) => { 
+
+            const promises = classAxie.map(async (classAxie) => {
+                const response = await AxieClass.get(classAxie).find()
+                return response
+            })
+
+            const results = await Promise.all(promises)
+            const allAxies = results.flat()
+
+            return allAxies
+
+            // const response = await AxieClass.get(classAxie).find()
+            // return response
         }
     },
     Mutation: {
-        addMultipleAxies: async (_, { axies }) => {
-          try {
-            let response = await Axie.insertMany(axies);
-            return response;
-          } catch (error) {
-            throw new Error('Failed to add axies');
-          }
-        },
-      },
-      Mutation: {
         addMultipleAxiesToClass: async (_, { axies, classAxie }) => {
           try {
             let response = await AxieClass.get(classAxie).insertMany(axies);
@@ -81,11 +95,11 @@ const getAxieLatest = async (req, res) => {
               "sort": "PriceAsc",
               "auctionType": "All"
             },
-            "query": "query GetAxieLatest($from: Int, $sort: SortBy, $size: Int, $auctionType: AuctionType) {\n  axies(from: $from, sort: $sort, size: $size, auctionType: $auctionType) {\n    total\n    results {\n      ...AxieRowData\n   __typename\n    }\n   __typename\n  }\n}\n\nfragment AxieRowData on Axie {\n  id\n  class\n  name\n class\n  stage\n  order {\n    ...OrderInfo\n    __typename\n  }  __typename\n}\n\n fragment OrderInfo on Order {\n  currentPriceUsd\n  __typename\n} \n"
+            "query": "query GetAxieLatest($from: Int, $sort: SortBy, $size: Int) {\n  axies(from: $from, sort: $sort, size: $size) {\n    total\n    results {\n      ...AxieRowData\n   __typename\n    }\n   __typename\n  }\n}\n\nfragment AxieRowData on Axie {\n  id\n  class\n  name\n class\n  stage\n  order {\n    ...OrderInfo\n    __typename\n  }  __typename\n}\n\n fragment OrderInfo on Order {\n  currentPriceUsd\n  __typename\n} \n"
         });
 
         const axies = await responseFetch.data.data.axies.results;
-    
+        
         const axiesGrouped = new Map() 
         AXIE_CLASS.forEach( (TYPE, i) => {
             axiesGrouped.set(TYPE,  []) 
@@ -111,16 +125,11 @@ const getAxieLatest = async (req, res) => {
                     }
                 }`;
 
-
                 const responsePost = await axios.post('http://localhost:3000/graphql', {
                     query: mutation(axiesGrouped.get(TYPE)),
                 });
             }
         })
-        
-        // const responsePost = await axios.post('http://localhost:3000/graphql', {
-        //     query: mutation(axies),
-        // });
 
         return responseFetch.data;
     }catch(error){
@@ -128,10 +137,35 @@ const getAxieLatest = async (req, res) => {
     }
 };
 
-app.get('/', async (req, res) => {
+app.get('/getPostAxies', async (req, res) => {
     const axie = await getAxieLatest();
     res.json(axie);
-  });
+});
+
+app.get('/getAllFromDB', async (req, res) => {
+    try{
+        const query = `
+        query {
+            getAllAxies {
+                _id
+                name
+                stage
+                class
+                currentPrice
+            }
+        }`;
+
+        const response = await axios.post('http://localhost:3000/graphql', {
+            query: query
+        });
+
+        res.json(response.data)
+    }catch(error){
+        console.error(error)
+        throw new Error('Failed to get axies from database');
+    }
+});
+
 
 const server = new ApolloServer({ typeDefs, resolvers });
     server.start().then(res => {

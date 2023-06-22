@@ -12,7 +12,7 @@ const axieSchema = new Schema({
 
 const AxieClass = new Map()
 AXIE_CLASS.forEach( (TYPE, i) => {
-    AxieClass.set(TYPE,  mongoose.model(TYPE.concat('_class'), axieSchema)) 
+    AxieClass.set(TYPE,  mongoose.model(TYPE.concat('_class'), axieSchema, TYPE.concat('_class'))) 
 })
 
 module.exports = {
